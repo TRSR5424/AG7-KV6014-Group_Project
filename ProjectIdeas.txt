@@ -1,0 +1,6 @@
+-A platform to help NHS teams collaboratively assess the benefits, costs and practical requirments of moving care from hospital to community care.
+
+-A tool to help with burnout in doctors and nurses. Create a system to determine how "burntout" someone is and then prepose a guide on how to help
+eg, a step by step plan, links to other support services and general tips and tricks
+
+-An app to support people to make gradual changes to improve: sleep, diet and exercise from a their starting point not just generic advice.
