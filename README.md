@@ -3,3 +3,4 @@
 |Name|Student ID|Role|
 |-----|----------|----|
 |Archie Ker|w24019843|xyz|
+|Felix Anderson|w23005217|xyz|
