@@ -1,0 +1,23 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Runtime data and local databases
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Test and build output
+coverage/
+dist/
+
+# Logs and local OS files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
