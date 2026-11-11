@@ -6,7 +6,7 @@ const helmet = require("helmet");
 const PDFDocument = require("pdfkit");
 const { createDatabase } = require("./db");
 const { bcrypt, hashToken, createToken, issueJwt, requireAuth, requireRoles } = require("./auth");
-const { entrySchema, activateSchema, loginSchema, reviewSchema } = require("./validation");
+const { entrySchema, activateSchema, loginSchema, reviewSchema, inviteSchema } = require("./validation");
 
 const URGENT_RATING = 8;
 const MAX_BODY_BYTES = "32kb";
@@ -31,7 +31,16 @@ function makeApp(db = createDatabase()) {
 
   app.post("/api/auth/activate", (req, res) => {
     const parsed = activateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid activation details" });
+    if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path?.[0];
+      const messages = {
+        token: "Your invite token is missing or invalid",
+        email: "Email address not valid",
+        password: "Password must be at least 10 characters",
+        consentGiven: "You must accept the consent notice to continue"
+      };
+      return res.status(400).json({ error: messages[field] || "Invalid activation details" });
+    }
     const { token, email, password } = parsed.data;
     const invite = db.prepare(
       "SELECT i.* FROM invite_tokens i JOIN appointments a ON a.id = i.appointment_id WHERE i.token_hash = ? AND i.used_at IS NULL AND i.expires_at > ? AND a.patient_id IS NULL"
@@ -78,6 +87,24 @@ function makeApp(db = createDatabase()) {
     if (user.role === "gp" && appointment.gp_id !== user.sub) return null;
     return appointment;
   }
+
+  app.post("/api/invites", requireRoles("gp"), (req, res) => {
+    const parsed = inviteSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid invite details" });
+    const { email, scheduledAt } = parsed.data;
+    const appointmentId = crypto.randomUUID();
+    const token = createToken();
+    const expiresAt = new Date(Date.now() + Number(process.env.INVITE_EXPIRES_HOURS || 72) * 3600000).toISOString();
+    const create = db.transaction(() => {
+      db.prepare("INSERT INTO appointments (id, gp_id, scheduled_at, status, created_at) VALUES (?, ?, ?, 'open', ?)")
+        .run(appointmentId, req.user.sub, scheduledAt, now());
+      db.prepare("INSERT INTO invite_tokens (id, token_hash, appointment_id, email, expires_at) VALUES (?, ?, ?, ?, ?)")
+        .run(crypto.randomUUID(), hashToken(token), appointmentId, email, expiresAt);
+      audit(db, req.user.sub, "invite_created", "appointment", appointmentId);
+    });
+    create();
+    return res.status(201).json({ appointmentId, inviteToken: token, expiresAt });
+  });
 
   app.get("/api/appointments", (req, res) => {
     let rows;

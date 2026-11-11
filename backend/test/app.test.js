@@ -105,4 +105,25 @@ describe("CarePath API", () => {
     expect(response.status).toBe(200);
     expect(response.body.review).toBeUndefined();
   });
+
+  it("lets a gp create a patient invite", async () => {
+    const gpToken = issueJwt({ id: gpId, email: "gp@example.test", role: "gp" });
+    const response = await request(app)
+      .post("/api/invites")
+      .set("Authorization", `Bearer ${gpToken}`)
+      .send({ email: "newpatient@example.test", scheduledAt: new Date(Date.now() + 86400000).toISOString() });
+    expect(response.status).toBe(201);
+    expect(typeof response.body.inviteToken).toBe("string");
+    const row = db.prepare("SELECT * FROM invite_tokens WHERE appointment_id = ?").get(response.body.appointmentId);
+    expect(row.email).toBe("newpatient@example.test");
+  });
+
+  it("blocks patients from creating invites", async () => {
+    const patientToken = issueJwt({ id: patientId, email: "patient@example.test", role: "patient" });
+    const response = await request(app)
+      .post("/api/invites")
+      .set("Authorization", `Bearer ${patientToken}`)
+      .send({ email: "someone@example.test", scheduledAt: new Date().toISOString() });
+    expect(response.status).toBe(403);
+  });
 });

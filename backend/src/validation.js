@@ -39,4 +39,9 @@ const reviewSchema = z.object({
   privateNotes: z.string().trim().max(4000).optional()
 });
 
-module.exports = { symptoms, entrySchema, activateSchema, loginSchema, reviewSchema };
+const inviteSchema = z.object({
+  email: z.string().email().max(320),
+  scheduledAt: z.string().datetime()
+});
+
+module.exports = { symptoms, entrySchema, activateSchema, loginSchema, reviewSchema, inviteSchema };

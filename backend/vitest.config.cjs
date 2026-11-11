@@ -1,5 +1,6 @@
 module.exports = {
   test: {
-    globals: true
+    globals: true,
+    env: { DATABASE_FILE: ":memory:" }
   }
 };
