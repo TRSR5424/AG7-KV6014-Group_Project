@@ -38,7 +38,7 @@ function App() {
   }
 
   if (auth.user.role === 'patient') {
-    return <PatientDashboard user={auth.user} onLogout={handleLogout} />
+    return <PatientDashboard user={auth.user} token={auth.token} onLogout={handleLogout} />
   }
 
   return (
