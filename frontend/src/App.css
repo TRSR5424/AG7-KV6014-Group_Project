@@ -40,7 +40,8 @@
   font-size: 15px;
   color: var(--text-h);
 
-  input {
+  input,
+  textarea {
     font: inherit;
     padding: 10px 12px;
     border-radius: 8px;
@@ -139,5 +140,43 @@
   input {
     margin-top: 3px;
     flex-shrink: 0;
+  }
+}
+
+.patient-card {
+  max-width: 640px;
+}
+
+.symptom-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+
+  legend {
+    padding: 0 6px;
+    font-weight: 600;
+    color: var(--text-h);
+  }
+}
+
+.symptom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--text-h);
+
+  input {
+    width: 90px;
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text-h);
   }
 }
