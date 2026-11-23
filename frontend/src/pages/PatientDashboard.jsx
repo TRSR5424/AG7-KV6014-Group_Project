@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import Timeline from '../components/Timeline'
+import { createEntry, listAppointments, listEntries } from '../lib/api'
+import { formatEntryDate } from '../lib/timeline'
 
 const SYMPTOM_GROUPS = [
   { heading: 'General', symptoms: ['temperature', 'fatigue'] },
@@ -12,39 +15,65 @@ const URGENT_NOTICE = 'If you need urgent help, call 999. This app is not an eme
 
 function PatientDashboard({ user, token, onLogout }) {
   const [appointmentId, setAppointmentId] = useState(null)
+  const [timelineId, setTimelineId] = useState(null)
   const [scheduledAt, setScheduledAt] = useState('')
   const [ratings, setRatings] = useState({})
   const [medications, setMedications] = useState('')
   const [notes, setNotes] = useState('')
+  const [entries, setEntries] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [closed, setClosed] = useState(false)
   const [saved, setSaved] = useState(null)
+  const [correctionOf, setCorrectionOf] = useState(null)
+
+  const loadEntries = useCallback(async (id) => {
+    try {
+      const data = await listEntries(token, id)
+      setEntries(data.entries || [])
+    } catch (err) {
+      setError(err.message)
+    }
+  }, [token])
 
   useEffect(() => {
+    let active = true
     async function loadAppointment() {
       try {
-        const response = await fetch('/api/appointments', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok) {
-          throw new Error(data.error || 'Could not load appointments')
-        }
-        const open = (data.appointments || []).find((item) => item.status === 'open')
-        if (!open) {
-          setClosed(true)
-          setError('No open appointment found')
+        const data = await listAppointments(token)
+        const appointments = data.appointments || []
+        const open = appointments.find((item) => item.status === 'open')
+        const selected = open || appointments[appointments.length - 1]
+        if (!active) return
+        if (!selected) {
+          setError('No appointment found')
           return
         }
-        setAppointmentId(open.id)
-        setScheduledAt(open.scheduled_at)
+        setTimelineId(selected.id)
+        setScheduledAt(selected.scheduled_at)
+        setClosed(!open)
+        if (open) {
+          setAppointmentId(open.id)
+        }
+        await loadEntries(selected.id)
       } catch (err) {
-        setError(err.message)
+        if (active) setError(err.message)
       }
     }
     loadAppointment()
-  }, [token])
+    return () => {
+      active = false
+    }
+  }, [token, loadEntries])
+
+  function startCorrection(entry) {
+    setCorrectionOf(entry)
+    setRatings({ ...entry.ratings })
+    setMedications(entry.medications || '')
+    setNotes(entry.notes || '')
+    setSaved(null)
+    setError(null)
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -63,36 +92,36 @@ function PatientDashboard({ user, token, onLogout }) {
     }
     setLoading(true)
     try {
-      const response = await fetch(`/api/appointments/${appointmentId}/entries`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ ratings: rated, medications, notes }),
+      const payload = { ratings: rated, medications, notes }
+      if (correctionOf) {
+        payload.correctionOf = correctionOf.id
+      }
+      const data = await createEntry(token, appointmentId, payload)
+      setSaved({
+        alert: Boolean(data.alert),
+        message: data.urgentHelpMessage,
       })
-      const data = await response.json().catch(() => ({}))
-      if (response.status === 409) {
-        setClosed(true)
-        setError(data.error || 'This log is closed')
-        return
-      }
-      if (!response.ok) {
-        throw new Error(data.error || 'Could not save entry')
-      }
-      setSaved({ alert: Boolean(data.alert), message: data.urgentHelpMessage })
       setRatings({})
       setMedications('')
       setNotes('')
+      setCorrectionOf(null)
+      await loadEntries(timelineId)
     } catch (err) {
       setError(err.message)
+      if (err.message.toLowerCase().includes('closed')) {
+        setClosed(true)
+      }
     } finally {
       setLoading(false)
     }
   }
 
+  let submitLabel = 'Save entry'
+  if (loading) submitLabel = 'Saving...'
+  else if (correctionOf) submitLabel = 'Save correction'
+
   return (
-    <main className="auth-page">
+    <main className="auth-page patient-page">
       <section className="auth-card patient-card">
         <h2>Patient dashboard</h2>
         <p className="auth-subtitle">Signed in as {user.email}</p>
@@ -110,6 +139,11 @@ function PatientDashboard({ user, token, onLogout }) {
               <p className="auth-error" role="alert">{saved.message}</p>
             )}
           </div>
+        )}
+        {correctionOf && (
+          <p className="auth-subtitle">
+            Correcting entry from {formatEntryDate(correctionOf.createdAt)}
+          </p>
         )}
         {!closed && (
           <form className="auth-form" onSubmit={handleSubmit}>
@@ -158,10 +192,17 @@ function PatientDashboard({ user, token, onLogout }) {
               />
             </div>
             <button type="submit" className="auth-submit" disabled={loading || !appointmentId}>
-              {loading ? 'Saving...' : 'Save entry'}
+              {submitLabel}
             </button>
           </form>
         )}
+        <Timeline
+          entries={entries}
+          onCorrect={closed ? undefined : startCorrection}
+          emptyMessage="No entries recorded for this appointment yet"
+          showLegend={false}
+          showOriginalValues={false}
+        />
         <button type="button" className="auth-submit" onClick={onLogout}>
           Sign out
         </button>
